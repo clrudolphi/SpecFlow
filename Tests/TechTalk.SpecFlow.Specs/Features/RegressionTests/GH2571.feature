@@ -58,8 +58,8 @@ Scenario: GH2571
                     
                     int x = _docString.IndexOf("<custom");
                     string line = _docString.Substring(x);
-                    int nl = line.IndexOf("\n");
-                    _customErrorString = line.Substring(0, nl - 1);
+                    int nl = line.IndexOf("system") - 2;
+                    _customErrorString = line.Substring(0, nl - 1).Trim();
                 }
 
                 [Then("the customErrors element should be (.*)")]
