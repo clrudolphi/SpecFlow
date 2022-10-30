@@ -14,6 +14,8 @@ using TechTalk.SpecFlow.Parser;
 using System.Globalization;
 using System.IO;
 using TechTalk.SpecFlow.Tracing;
+using Gherkin.Ast;
+using TechTalk.SpecFlow.EnvironmentAccess;
 
 namespace TechTalk.SpecFlow.GeneratorTests
 {
@@ -125,5 +127,103 @@ namespace TechTalk.SpecFlow.GeneratorTests
             }          
         }
 
+        [Fact]
+        public void GenerateBackgroundStatementsForRule_GivenAScenarioWithoutRules_ReturnsAnEmptyList()
+        {
+            // Arrange
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation>().ToArray());
+            var rule = new Rule(null, null, "", "", "", new List<IHasLocation>().ToArray());
+            var sph = new ScenarioPartHelper(null, null);
+
+            //Act
+            var output = sph.GenerateBackgroundStatementsForRule(null, feature, rule);
+
+            //Assert
+            output.Should().BeEmpty();
+        }
+        [Fact]
+        public void GenerateBackgroundStatementsForRule_GivenAScenarioWithARuleWithoutBackground_ReturnsAnEmptyList()
+        {
+            // Arrange
+            var given = new Step(new Location(0, 0), "Given", "something", null);
+            var rule = new Rule(null, null, "", "", "", new List<IHasLocation> { given}.ToArray());
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation>{ rule }.ToArray());
+            var sph = new ScenarioPartHelper(null, null);
+
+            //Act
+            var output = sph.GenerateBackgroundStatementsForRule(null, feature, rule);
+
+            //Assert
+            output.Should().BeEmpty();
+        }
+        [Fact]
+        public void GenerateBackgroundStatementsForRule_GivenAScenarioWithARuleWithBackground_ReturnsTheBackgroundsSteps()
+        {
+            // Arrange
+            var given = new SpecFlowStep(new Location(1, 1), "Given", "Something", null, StepKeyword.Given, new Parser.ScenarioBlock());
+            var background = new Background(new Location(1, 1), "Background", "", "", new List<Step> { given }.ToArray());
+            var rule = new Rule(null, null, "", "", "", new List<IHasLocation> { background }.ToArray());
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation> { rule }.ToArray());
+
+            var config = new SpecFlowConfiguration(new ConfigSource(), null, null, null, null, true, new MissingOrPendingStepsOutcome(), false, false, new TimeSpan(), new BindingSkeletons.StepDefinitionSkeletonStyle(), null, false, true, null, new ObsoleteBehavior(), false);
+            var sph = new ScenarioPartHelper(config, new CodeDomHelper(CodeDomProviderLanguage.CSharp));
+
+            var context = new TestClassGenerationContext(new Generator.UnitTestProvider.XUnit2TestGeneratorProvider(new CodeDomHelper(CodeDomProviderLanguage.CSharp)),
+                                                            new SpecFlowDocument(null, null, new SpecFlowDocumentLocation("/path")),
+                                                            new CodeNamespace(),
+                                                            new CodeTypeDeclaration(),
+                                                            new CodeMemberField(),
+                                                            null, null, null, null, null, null, null, null, false);
+
+            //Act
+            var output = sph.GenerateBackgroundStatementsForRule(context, feature, rule);
+
+            //Assert
+            output.Should().NotBeNullOrEmpty();
+            output.OfType<CodeExpressionStatement>().Count().Should().Be(1);
+            output.OfType<CodeExpressionStatement>().First().Expression.Should().BeOfType<CodeMethodInvokeExpression>();
+        }
+
+        [Fact]
+        public void TryDoesThisScenarioBelongToARule_WhenGivenAScenarioInARule_ReturnsTrueAndTheRule()
+        {
+            var scenario = new Scenario(null, new Location(), "Given", "something", "", null, null);
+            var rule = new Rule(null, null, "", "", "", new List<IHasLocation> { scenario }.ToArray());
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation> { rule }.ToArray());
+            var sph = new ScenarioPartHelper(null, null);
+
+            var result = sph.TryDoesThisScenarioBelongToARule(scenario, feature, out Rule output);
+
+            result.Should().BeTrue();
+            output.Should().Be(rule);
+
+        }
+        [Fact]
+        public void TryDoesThisScenarioBelongToARule_WhenFeatureHasMultipleRules_ReturnsTrueAndTheCorrectRule()
+        {
+            var scenario = new Scenario(null, new Location(), "Given", "something", "", null, null);
+            var rule1 = new Rule(null, null, "", "", "", new List<IHasLocation> { scenario }.ToArray());
+            var rule2 = new Rule(null, null, "", "", "", new List<IHasLocation> {  }.ToArray());
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation> { rule2, rule1 }.ToArray());
+            var sph = new ScenarioPartHelper(null, null);
+
+            var result = sph.TryDoesThisScenarioBelongToARule(scenario, feature, out Rule output);
+
+            result.Should().BeTrue();
+            output.Should().Be(rule1);
+
+        }
+        [Fact]
+        public void TryDoesThisScenarioBelongToARule_WhenAFeatureHasNoRules_ReturnsFalseAndNoRule()
+        {
+            var scenario = new Scenario(null, new Location(), "Given", "something", "", null, null);
+            var feature = new SpecFlowFeature(null, null, null, null, "", "", new List<IHasLocation> { scenario }.ToArray());
+            var sph = new ScenarioPartHelper(null, null);
+
+            var result = sph.TryDoesThisScenarioBelongToARule(scenario, feature, out Rule rule);
+
+            result.Should().BeFalse();
+            rule.Should().BeNull();
+        }
     }
 }
