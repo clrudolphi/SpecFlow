@@ -1,4 +1,4 @@
-﻿Feature: Rule Background Steps Execution
+Feature: Rule Background Steps Execution
 
     Scenario: Should be able to execute scenarios in Rules that have backgrounds
     Given there is a feature file in the project as
