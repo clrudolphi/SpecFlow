@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using BoDi;
@@ -568,7 +569,11 @@ namespace TechTalk.SpecFlow.Infrastructure
             
             try
             {
-                await _bindingInvoker.InvokeBindingAsync(match.StepBinding, _contextManager, arguments, _testTracer, durationHolder);
+                object retVal = await _bindingInvoker.InvokeBindingAsync(match.StepBinding, _contextManager, arguments, _testTracer, durationHolder);
+                if (retVal != null)
+                {
+                    _contextManager.ScenarioContext.ScenarioContainer.RegisterInstanceAs(retVal, retVal.GetType(), null, (retVal is IDisposable));
+                }
             }
             finally
             {
@@ -603,14 +608,25 @@ namespace TechTalk.SpecFlow.Infrastructure
         private async Task<object[]> GetExecuteArgumentsAsync(BindingMatch match)
         {
             var bindingParameters = match.StepBinding.Method.Parameters.ToArray();
-            if (match.Arguments.Length != bindingParameters.Length)
+            //            if (match.Arguments.Length != bindingParameters.Length)
+            if (match.Arguments.Length > bindingParameters.Length)      //if the scenario step provides more parsed values than method params - then that is a problem.
                 throw _errorProvider.GetParameterCountError(match, match.Arguments.Length);
 
-            var arguments = new object[match.Arguments.Length];
+            //            var arguments = new object[match.Arguments.Length];
+            var arguments = new object[bindingParameters.Length];
 
             for (var i = 0; i < match.Arguments.Length; i++)
             {
                 arguments[i] = await ConvertArg(match.Arguments[i], bindingParameters[i].Type);
+            }
+            for (int i = match.Arguments.Length; i < bindingParameters.Length; i++)
+            {
+                var itemType = bindingParameters[i].Type as RuntimeBindingType;
+                var t = itemType != null ? itemType.Type : null;
+                if (t == null) throw _errorProvider.GetParameterCountError(match, match.Arguments.Length); 
+                var item = _contextManager.ScenarioContext.ScenarioContainer.Resolve(t);
+                if (item == null) throw _errorProvider.GetParameterCountError(match, match.Arguments.Length); 
+                arguments[i] = item;
             }
 
             return arguments;
